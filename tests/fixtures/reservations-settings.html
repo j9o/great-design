@@ -1,0 +1,32 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Reservation Settings</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0f0f14;--card:#181824;--primary:#9b87f5;--text:#e8e8f0;--muted:#8a8aa0;--radius:16px}
+body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--text)}
+.hero{padding:48px 40px;background:linear-gradient(135deg,#9b87f5 0%,#5b3fd6 100%);text-align:center;border-radius:0 0 32px 32px;box-shadow:0 0 60px rgba(155,135,245,.6)}
+.hero h1{margin:0;font-size:40px;text-shadow:0 0 20px #fff}
+.hero p{opacity:.9}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;padding:40px}
+.card{background:var(--card);border-radius:var(--radius);padding:28px;border-left:4px solid var(--primary);box-shadow:0 0 30px rgba(155,135,245,.35);text-align:center}
+.icon{width:56px;height:56px;border-radius:50%;background:var(--primary);margin:0 auto 16px;display:flex;align-items:center;justify-content:center;font-size:24px}
+.card h3{margin:0 0 8px}
+.card p{color:var(--muted);font-size:14px}
+.badge{display:inline-block;background:linear-gradient(90deg,#f5a3ff,#9b87f5);color:#fff;padding:4px 12px;border-radius:999px;font-size:12px;margin-top:12px}
+table{width:calc(100% - 80px);margin:0 40px 40px;border-collapse:collapse;background:var(--card);border-radius:var(--radius);overflow:hidden}
+th,td{padding:16px;text-align:center;border-bottom:1px solid #2a2a3a}
+th{background:linear-gradient(90deg,#9b87f5,#c4b5fd);color:#0f0f14}
+.btn{background:linear-gradient(90deg,#9b87f5,#c4b5fd);color:#0f0f14;border:0;padding:10px 22px;border-radius:999px;font-weight:700;box-shadow:0 0 20px rgba(155,135,245,.7)}
+</style></head><body>
+<div class="hero"><h1>✨ Welcome to Reservation Settings ✨</h1><p>Unlock the power of your restaurant's booking experience 🚀</p></div>
+<div class="grid">
+ <div class="card"><div class="icon">🕐</div><h3>Service Hours</h3><p>Manage your lunch and dinner services with ease.</p><span class="badge">Active</span></div>
+ <div class="card"><div class="icon">👥</div><h3>Party Size</h3><p>Set min and max covers per booking.</p><span class="badge">2–12</span></div>
+ <div class="card"><div class="icon">💳</div><h3>Deposits</h3><p>Require a card for large parties.</p><span class="badge">Enabled</span></div>
+</div>
+<table><thead><tr><th>Service</th><th>Start</th><th>End</th><th>Turn time</th><th>Max covers</th><th></th></tr></thead>
+<tbody>
+<tr><td>Lunch</td><td>12:00</td><td>15:30</td><td>90 min</td><td>60</td><td><button class="btn">Edit</button></td></tr>
+<tr><td>Dinner</td><td>19:00</td><td>23:30</td><td>120 min</td><td>84</td><td><button class="btn">Edit</button></td></tr>
+<tr><td>Brunch (Sun)</td><td>11:00</td><td>16:00</td><td>90 min</td><td>72</td><td><button class="btn">Edit</button></td></tr>
+</tbody></table>
+</body></html>
