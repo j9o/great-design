@@ -14,16 +14,17 @@ git clone https://github.com/j9o/great-design ~/.claude/skills/great-design
 Claude Code picks it up right away as `/great-design` (restart only if `~/.claude/skills/` did not exist before the clone). The screenshot helper needs Node 20+ (Playwright's floor) and Playwright with Chromium, resolved from the project you run it in, from the skill directory, or from a global install:
 
 ```bash
-npm i -g playwright && npx playwright install chromium   # add --with-deps on Linux
+cd ~/.claude/skills/great-design && npm i && npx playwright install chromium   # in the skill directory
+npm i -g playwright && npx playwright install chromium                         # or globally; add --with-deps on Linux
 ```
 
-If Playwright is not found, `shoot.cjs` exits with code 2 and prints that command. Update with `git -C ~/.claude/skills/great-design pull`; uninstall by deleting the directory.
+If Playwright is not found, `shoot.cjs` exits with code 2 and prints the global command. Chromium runs sandboxed; a Linux container without unprivileged user namespaces refuses to launch it. Update with `git -C ~/.claude/skills/great-design pull`; uninstall by deleting the directory.
 
-**Optional companions.** The skill runs alone. When installed, it uses Anthropic's `frontend-design` for aesthetic vocabulary where no design system governs the surface, `make-interfaces-feel-better` for a polish pass, and gstack's `/design-shotgun` and `/design-review` plus Vercel's `web-design-guidelines` as pre-push gates. The critic loop and the screenshot helper are self-contained.
+**Optional companions.** The skill runs alone. When installed, it uses Anthropic's `frontend-design` for aesthetic vocabulary where no design system governs the surface, gstack's `/design-shotgun` to render directions when the user will choose, `make-interfaces-feel-better` for a polish pass before the first critic round, and `emil-design-eng` for motion; gstack's `/design-review` and Vercel's `web-design-guidelines` stay the pre-push gates. The critic loop and the screenshot helper are self-contained.
 
 ## How to use
 
-Invoke `/great-design` with a one-line brief, or just describe the surface; the skill's description also triggers on its own. Give it the surface and audience, the constraints that matter, and whether you will be around to pick between rendered directions. The "How to use" section at the top of `SKILL.md` says what comes back and what it costs.
+Invoke `/great-design` with a one-line brief, or just describe the surface; the skill's description also triggers on its own. Give it the surface and audience, the constraints that matter, and whether you will be around to pick between rendered directions. The "How to use" section in `SKILL.md` says what comes back and what it costs.
 
 ## What's inside
 
@@ -31,10 +32,10 @@ Invoke `/great-design` with a one-line brief, or just describe the surface; the 
 |------|---------|
 | `SKILL.md` | The skill: Discover, Define, Deliver, the critic prompt, quick reference, red flags |
 | `shoot.cjs` | `node shoot.cjs <url-or-file> <out-prefix> [widths]`: full-page 2x PNGs at 1440 and 390, waits for web fonts, scrolls every scroll container to fire reveal animations, emulates reduced motion |
-| `tests/smoke.cjs` | `npm test`: renders the fixture and checks the PNGs and the argument validation |
+| `tests/smoke.cjs` | `npm test`: renders the fixtures and checks PNG sizes, reveals, fonts, the local-file policy, dev-server shorthand and argument validation |
 | `LICENSE` | MIT, covering this repository's text and code, not the source article |
 | `tests/scenarios.md` | The two pressure scenarios the skill was tested against, and what to compare |
-| `tests/fixtures/reservations-settings.html` | A deliberately generated-looking admin page for the design-system scenario |
+| `tests/fixtures/` | `reservations-settings.html`, the generated-looking admin page for scenario 2; the rest are probes the smoke test uses (fonts, reveals, inner scroll, tall pages, the scroll cap) |
 
 ## Why these rules
 
@@ -42,7 +43,7 @@ Measured on the same brief, same model, same deadline pressure (2026-09-02):
 
 - Without the skill, two runs produced the same page: same ground hex, bone serif, mono labels, ledger, roman numerals, pull quote. With it, five runs produced five directions.
 - Every baseline run fed its critic the source code plus a list of what was already fixed, ran one round, and accepted 6/10 as final.
-- Fresh critics plateau around 6 to 7 and contradict each other round to round; rounds after the second rarely moved the score. Hence the budget: two rounds plus a post-removal check, more only while the score moves, four at most.
+- Fresh critics plateau around 6 to 7 and contradict each other round to round; rounds after the second rarely moved the score. Hence the budget: two rounds, one more after the removal pass only if it changed the page, more only while the score moves, four at most.
 - One removal pass under critic pressure deleted the element the brief said to remember. The concept is now frozen after the brief and the signature is protected.
 - Runs took 20 to 85 minutes each, the spread being the number of critic rounds. Run logs and renders stayed local; nothing under `tests/` is a recorded result.
 

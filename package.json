@@ -4,5 +4,12 @@
   "description": "Claude Code skill: a test-first build procedure for UI that looks designed, not generated",
   "scripts": {
     "test": "node tests/smoke.cjs"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.0"
   }
 }
