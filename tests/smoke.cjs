@@ -39,6 +39,7 @@ function run(args, options = {}) {
 const sampler = {
   browser: null,
   async pixels(file, points) {
+    if (!fs.existsSync(file)) return points.map(() => null);
     this.browser = this.browser || await resolveChromium().launch({ chromiumSandbox: true });
     const page = await this.browser.newPage();
     try {
@@ -53,8 +54,8 @@ const sampler = {
   },
   async close() { if (this.browser) await this.browser.close(); },
 };
-const isGreen = ([r, g, b]) => r === 0 && g === 255 && b === 0;
-const isRed = ([r, g, b]) => r === 255 && g === 0 && b === 0;
+const isGreen = p => !!p && p[0] === 0 && p[1] === 255 && p[2] === 0;
+const isRed = p => !!p && p[0] === 255 && p[1] === 0 && p[2] === 0;
 
 function serve(file) {
   return new Promise(resolve => {
@@ -105,6 +106,17 @@ async function main() {
   const inner = await run([fixture('inner-scroll.html'), out('inner'), '1440']);
   const [innerTop] = await sampler.pixels(out('inner-1440.png'), [[100, 100]]);
   check('an inner scroll container is scrolled so its reveal fires, then put back to the top', inner.status === 0 && isGreen(innerTop), JSON.stringify(innerTop));
+
+  const late = await run([fixture('late-animation.html'), out('late'), '1440']);
+  const [latePixel] = await sampler.pixels(out('late-1440.png'), [[100, 100]]);
+  check('an animation that starts after the scroll pass is finished before capture, and reported', late.status === 0 && /1 finite animation\(s\) were still running/.test(late.stderr) && isGreen(latePixel), JSON.stringify(latePixel) + late.stderr);
+
+  const asUrl = await run([pathToFileURL(fixture('local-font.html')).href, out('fileurl'), '1440']);
+  check('a file:// URL target renders', asUrl.status === 0 && /^fonts: ShootProbe$/m.test(asUrl.stdout), asUrl.stderr);
+  const missingUrl = await run(['file:///nonexistent/x.html', out('missingurl')]);
+  check('a file:// URL to a missing file exits 2', missingUrl.status === 2 && /file not found/.test(missingUrl.stderr), missingUrl.stderr);
+  const dirUrl = await run([pathToFileURL(path.join(__dirname, 'fixtures')).href + '/', out('dirurl')]);
+  check('a file:// URL to a directory exits 2', dirUrl.status === 2 && /file not found/.test(dirUrl.stderr), dirUrl.stderr);
 
   const tall = await run([fixture('tall.html'), out('tall'), '1440']);
   check('a capture taller than 6000 CSS px warns on stderr', tall.status === 0 && /CSS px tall/.test(tall.stderr), tall.stderr);
