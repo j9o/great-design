@@ -45,6 +45,8 @@ const MAX_FONT_FAMILIES = 20;
 
 class UsageError extends Error {}
 function fail(message) { throw new UsageError(message); }
+// Values read back from the page are untrusted; only a positive integer may reach stderr.
+const asCount = v => (Number.isSafeInteger(v) && v > 0 ? v : 0);
 
 function chromiumFrom(paths) {
   for (const location of paths) {
@@ -70,8 +72,10 @@ function resolveChromium() {
 }
 
 function toUrl(target) {
-  if (/^file:\/\//i.test(target)) return pathToFileURL(localFile(fileURLToPath(new URL(target)))).href;
-  if (/^https?:\/\//i.test(target)) return new URL(target).href;
+  try {
+    if (/^file:\/\//i.test(target)) return pathToFileURL(localFile(fileURLToPath(new URL(target)))).href;
+    if (/^https?:\/\//i.test(target)) return new URL(target).href;
+  } catch (error) { if (error instanceof UsageError) throw error; fail(`not a usable URL: ${target}`); }
   if (/^[\w.-]+:\d+(\/|$)/.test(target)) return 'http://' + target;
   return pathToFileURL(localFile(target)).href;
 }
@@ -186,7 +190,7 @@ async function fireScrollReveals(page) {
   if (stopped === 'time') console.error(`shoot.cjs: scroll pass hit its ${SCROLL_WAIT_MS / 1000} s cap; some reveals may not have fired`);
   if (stopped === 'steps') console.error(`shoot.cjs: a scroll container was longer than ${MAX_STEPS_PER_SCROLLER} steps; reveals near its end may not have fired`);
   if (stopped === 'failed') console.error('shoot.cjs: scroll pass could not run (page navigated or crashed); reveals may not have fired');
-  const suppressed = await page.evaluate(() => window.__shootSuppressedLeaves || 0).catch(() => 0);
+  const suppressed = asCount(await page.evaluate(() => window.__shootSuppressedLeaves).catch(() => 0));
   if (suppressed) console.error(`shoot.cjs: ${suppressed} IntersectionObserver leave event(s) suppressed to keep reveals visible; state driven by leaving (scrollspy nav, sticky-header toggles) may be wrong in this capture (SHOOT_STICKY_REVEALS=0 disables)`);
 }
 
@@ -195,12 +199,12 @@ async function fireScrollReveals(page) {
 // animations (spinners, pulses) are left alone and not counted.
 async function settleAnimations(page) {
   await page.waitForTimeout(SETTLE_MS);
-  const finished = await page.evaluate(() => {
+  const finished = asCount(await page.evaluate(() => {
     const finite = a => { const t = a.effect && a.effect.getComputedTiming && a.effect.getComputedTiming(); return t && t.iterations !== Infinity && Number.isFinite(t.endTime); };
     const active = document.getAnimations().filter(a => a.playState === 'running' && finite(a));
     active.forEach(a => { try { a.finish(); } catch {} });
-    return active.length;
-  }).catch(() => 0);
+    return Number(active.length);
+  }).catch(() => 0));
   if (finished) console.error(`shoot.cjs: ${finished} finite animation(s) were still running ${SETTLE_MS} ms after the scroll pass and were finished; check reveals near the bottom`);
 }
 
@@ -223,7 +227,7 @@ async function capture(browser, url, width, outPrefix) {
     const png = await page.screenshot({ path: outPath, fullPage: true });
     const cssHeight = png.readUInt32BE(20) / 2; // PNG IHDR: width at byte 16, height at byte 20; 2x scale
     if (cssHeight > TALL_CSS_PX) console.error(`shoot.cjs: ${outPath} is ${Math.round(cssHeight)} CSS px tall; image readers downscale it, so shoot sections separately for detail work`);
-    if (blocked.size) console.error(`shoot.cjs: blocked ${blocked.size} local subresource(s) not allowed for ${allowedDirs.join(' or ') || 'a served page'} (outside it, dot-prefixed, or missing), e.g. ${[...blocked][0]}; the capture may be missing styles or images`);
+    if (blocked.size) console.error(`shoot.cjs: blocked ${blocked.size} local subresource(s) not allowed for ${allowedDirs.join(' or ') || 'a served page'} (outside it, dot-prefixed, or missing), e.g. ${String([...blocked][0]).slice(0, 200)}; the capture may be missing styles or images`);
     console.log(outPath);
   } finally {
     await context.close();
