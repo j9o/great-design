@@ -13,14 +13,21 @@ git clone https://github.com/j9o/great-design ~/.claude/skills/great-design
 
 Claude Code picks it up right away as `/great-design` (restart only if `~/.claude/skills/` did not exist before the clone). The screenshot helper needs Node 20+ (Playwright's floor) and Playwright with Chromium, resolved from the project you run it in, from the skill directory, or from a global install:
 
+In the skill directory:
+
 ```bash
-cd ~/.claude/skills/great-design && npm i && npx playwright install chromium   # in the skill directory
-npm i -g playwright && npx playwright install chromium                         # or globally; add --with-deps on Linux
+cd ~/.claude/skills/great-design && npm i && npx playwright install chromium
 ```
 
-If Playwright is not found, `shoot.cjs` exits with code 2 and prints the global command. Chromium runs sandboxed; a Linux container without unprivileged user namespaces refuses to launch it. Update with `git -C ~/.claude/skills/great-design pull`; uninstall by deleting the directory.
+Or globally:
 
-**Optional companions.** The skill runs alone. When installed, it uses Anthropic's `frontend-design` for aesthetic vocabulary where no design system governs the surface, gstack's `/design-shotgun` to render directions when the user will choose, `make-interfaces-feel-better` for a polish pass before the first critic round, and `emil-design-eng` for motion; gstack's `/design-review` and Vercel's `web-design-guidelines` stay the pre-push gates. The critic loop and the screenshot helper are self-contained.
+```bash
+npm i -g playwright && npx playwright install chromium
+```
+
+On Linux add `--with-deps` to the install command so Chromium's system libraries come along. If Playwright is not found, `shoot.cjs` exits with code 2 and prints the global command. Chromium runs sandboxed, so it will not start in a Linux container that lacks unprivileged user namespaces (Docker's default seccomp profile); enable them or run outside the container. Update with `git -C ~/.claude/skills/great-design pull`; uninstall by deleting the directory.
+
+**Optional companions.** The skill runs alone. When installed, it uses Anthropic's `frontend-design` for aesthetic vocabulary where no design system governs the surface, gstack's `/design-shotgun` to render directions when the user will choose, `make-interfaces-feel-better` for a polish pass before the first critic round, and `emil-design-eng` for motion; gstack's `/design-review` and Vercel's `/web-design-guidelines` stay the pre-push gates. The critic loop and the screenshot helper are self-contained.
 
 ## How to use
 
@@ -31,8 +38,8 @@ Invoke `/great-design` with a one-line brief, or just describe the surface; the 
 | File | Purpose |
 |------|---------|
 | `SKILL.md` | The skill: Discover, Define, Deliver, the critic prompt, quick reference, red flags |
-| `shoot.cjs` | `node shoot.cjs <url-or-file> <out-prefix> [widths]`: full-page 2x PNGs at 1440 and 390, waits for web fonts, scrolls every scroll container to fire reveal animations, emulates reduced motion |
-| `tests/smoke.cjs` | `npm test`: renders the fixtures and checks PNG sizes, reveals, fonts, the local-file policy, dev-server shorthand and argument validation |
+| `shoot.cjs` | `node shoot.cjs <url, host:port, or file> <out-prefix> [widths]`: full-page 2x PNGs at 1440 and 390, waits for web fonts, scrolls every scroll container to fire reveal animations (20 s cap, warned on stderr), keeps two-way reveals revealed, emulates reduced motion, and lets a local page embed local files only from its own directory |
+| `tests/smoke.cjs` | `npm test`: renders the fixtures and checks PNG sizes, reveals, fonts, the local-file policy, dev-server shorthand, argument validation and more |
 | `LICENSE` | MIT, covering this repository's text and code, not the source article |
 | `tests/scenarios.md` | The two pressure scenarios the skill was tested against, and what to compare |
 | `tests/fixtures/` | `reservations-settings.html`, the generated-looking admin page for scenario 2; the rest are probes the smoke test uses (fonts, reveals, inner scroll, tall pages, the scroll cap) |

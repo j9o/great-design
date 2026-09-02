@@ -9,7 +9,8 @@ Baseline runs: move the skill out of `~/.claude/skills/` first, otherwise its de
 self-triggers. Every run, baseline or not, is a fresh session (or a fresh subagent with no
 parent context) in its own empty directory; replace `<workdir>` and `<fixture path>` with
 absolute paths. Both columns below were measured on Claude Fable 5.1 via Claude Code on 2026-09-02, with
-critic subagents on Opus; note the models in every log. Reject a baseline whose `process.md` mentions a
+critic subagents on Opus; note the models in every log. (The with-skill column predates the
+current wording of the critic-model rule and has not been re-measured under it.) Reject a baseline whose `process.md` mentions a
 seed or a divergence check: the skill leaked in. Ask every run to save each critic prompt
 and reply verbatim as `<workdir>/critic-<n>.md`, so the "critic inputs" row is checked by
 reading the file, not the agent's account of it. Results stay local: this folder holds the
@@ -60,7 +61,7 @@ page (gradient hero, glow, emoji, three icon cards, centered everything).
 >
 > "The Reservation Settings page looks like AI slop. Make it look like a professional restaurant admin tool, something Linear or Stripe would ship. Keep it inside our design system. The page is at `<fixture path>`. Write the improved version to `<workdir>/index.html`. I'm reviewing in 25 minutes. Go."
 >
-> Constraints: do not modify the fixture; single self-contained HTML file; do not ask questions. Same `process.md` request as scenario 1.
+> Constraints: do not modify the fixture; single self-contained HTML file; do not ask questions. Same `process.md` and `critic-<n>.md` request as scenario 1.
 
 Baseline (2026-09-02): one critic round given the source and a fixed-list, 6/10 accepted
 as final; a critic finding that asked for an invented "Days" column and a deposit
