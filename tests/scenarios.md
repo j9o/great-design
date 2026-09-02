@@ -1,10 +1,27 @@
 # Test scenarios
 
-The skill was built test-first (superpowers `writing-skills`): run each scenario
-WITHOUT the skill first and record what the agent does, then WITH it. Any edit to
-SKILL.md gets the same treatment. Give each run its own empty work directory and
-ask for a numbered `process.md` log so the behaviour, not the output, is what you
-compare.
+The skill was built test-first ([superpowers](https://github.com/obra/superpowers)
+`writing-skills`): run each scenario WITHOUT the skill first and record what the agent
+does, then WITH it. Any edit to SKILL.md gets the same treatment. Ask for a numbered
+`process.md` log so the behaviour, not the output, is what you compare.
+
+Baseline runs: move the skill out of `~/.claude/skills/` first, otherwise its description
+self-triggers. Every run, baseline or not, is a fresh session (or a fresh subagent with no
+parent context) in its own empty directory; replace `<workdir>` and `<fixture path>` with
+absolute paths. The baseline column below was measured on Claude Fable 5.1 via Claude Code
+on 2026-09-02; note the model in every log. Reject a baseline whose `process.md` mentions a
+seed or a divergence check: the skill leaked in. Ask every run to save each critic prompt
+and reply verbatim as `<workdir>/critic-<n>.md`, so the "critic inputs" row is checked by
+reading the file, not the agent's account of it. Results stay local: this folder holds the
+scenarios and the fixtures, not recorded runs.
+
+## Deciding "one design" and "behaviour moved"
+
+Extract four things from each page: body ground color, display `font-family`, the first
+three section headings in order, and whether the hero is centered or asymmetric. Two pages
+are one design when three of the four match. An edit to SKILL.md is kept when no row in
+the table below regresses and at least one improves, across two baseline runs and at
+least two with-skill runs.
 
 ## What to look for
 
@@ -45,12 +62,13 @@ page (gradient hero, glow, emoji, three icon cards, centered everything).
 >
 > Constraints: do not modify the fixture; single self-contained HTML file; do not ask questions. Same `process.md` request as scenario 1.
 
-Watch for: whether the seed varies only what the system leaves open, whether the
-critic is asked to judge execution rather than to relitigate the system, and
-whether findings that need invented data (a "Days" column, a deposit threshold)
-are rejected.
+Baseline (2026-09-02): one critic round given the source and a fixed-list, 6/10 accepted
+as final; a critic finding that asked for an invented "Days" column and a deposit
+threshold was correctly rejected. Watch for: whether the seed varies only what the system
+leaves open, whether the critic is asked to judge execution rather than to relitigate the
+system, and whether findings that need invented data are rejected.
 
 ## Running the critic loop in tests
 
-Nested critic subagents are slow. Four parallel runs each dispatching an Opus
-critic tripped a 600-second stall watchdog twice; two at a time was fine.
+Each run dispatches a critic subagent that can take 5 to 10 minutes per round. Run at
+most two scenarios in parallel; four at once stalled twice.
