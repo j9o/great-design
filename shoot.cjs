@@ -7,15 +7,18 @@
 // list could not be read. The PNG is as wide as the document's scroll width, so a phone PNG
 // wider than 780 px means horizontal overflow.
 // Per width: emulates prefers-reduced-motion before navigation (pages that honour it skip
-// transitions) and makes IntersectionObserver reveals sticky (an element seen in view is
-// never reported as leaving, so two-way reveal libraries stay revealed); waits for `load`
+// transitions) and makes IntersectionObserver reveals sticky (leave events for an element
+// already seen in view are dropped, so two-way reveal libraries stay revealed; scrollspy
+// state driven by leave events is then wrong, which is warned, and SHOOT_STICKY_REVEALS=0
+// turns it off); waits for `load`
 // (not `networkidle`, which dev servers and analytics keep from ever settling), then for
 // web fonts with an 8 s cap; steps the document and every real scroll container towards
 // the bottom (at most 60 steps each) so scroll-triggered reveals fire; scrolls every one
-// back to the top; finishes finite running animations; settles 500 ms; captures. Warnings
-// go to stderr: a scroll pass that hit its time cap (20 s, SHOOT_SCROLL_WAIT_MS overrides,
-// floor 3 s) or its step cap, animations still running at capture, a capture taller than
-// 6000 CSS px, and any blocked local subresource.
+// back to the top; finishes finite animations; settles 500 ms; captures. Warnings go to
+// stderr: a scroll pass that hit its time cap (20 s; SHOOT_SCROLL_WAIT_MS sets an integer
+// of milliseconds from 3000 to 300000, anything else is ignored with a warning) or its step
+// cap, or that could not run at all; suppressed leave events; finite animations still
+// running at capture; a capture taller than 6000 CSS px; any blocked local subresource.
 // A file target may load local files only from its own directory and below (real paths, so
 // symlinks cannot reach outside, and no dot-prefixed names such as .env or .git); a served
 // target may load none; network subresources are not restricted.
@@ -29,7 +32,10 @@ const DEFAULT_WIDTHS = '1440,390';
 const PACKAGES = ['playwright', '@playwright/test', 'playwright-core'];
 const FONT_WAIT_MS = 8000;
 const capOverride = Number(process.env.SHOOT_SCROLL_WAIT_MS);
-const SCROLL_WAIT_MS = Number.isInteger(capOverride) && capOverride >= 3000 && capOverride <= 300000 ? capOverride : 20000;
+const capValid = Number.isInteger(capOverride) && capOverride >= 3000 && capOverride <= 300000;
+if (process.env.SHOOT_SCROLL_WAIT_MS !== undefined && !capValid) console.error('shoot.cjs: SHOOT_SCROLL_WAIT_MS ignored; it must be an integer from 3000 to 300000');
+const SCROLL_WAIT_MS = capValid ? capOverride : 20000;
+const STICKY_REVEALS_ON = process.env.SHOOT_STICKY_REVEALS !== '0';
 const IN_PAGE_SCROLL_MS = SCROLL_WAIT_MS - 2000; // the page stops itself before the outer backstop fires
 const MAX_STEPS_PER_SCROLLER = 60;
 const SETTLE_MS = 500;
@@ -64,10 +70,15 @@ function resolveChromium() {
 }
 
 function toUrl(target) {
-  if (/^(https?|file):\/\//i.test(target)) return new URL(target).href;
+  if (/^file:\/\//i.test(target)) return pathToFileURL(localFile(fileURLToPath(new URL(target)))).href;
+  if (/^https?:\/\//i.test(target)) return new URL(target).href;
   if (/^[\w.-]+:\d+(\/|$)/.test(target)) return 'http://' + target;
+  return pathToFileURL(localFile(target)).href;
+}
+
+function localFile(target) {
   if (!fs.existsSync(target) || !fs.statSync(target).isFile()) fail(`file not found: ${target}`);
-  return pathToFileURL(path.resolve(target)).href;
+  return path.resolve(target);
 }
 
 // Directories a local target may embed files from: where the page sits and, if the page is a
@@ -79,18 +90,21 @@ function allowedDirsFor(url) {
   return [...dirs].map(dir => dir.endsWith(path.sep) ? dir : dir + path.sep);
 }
 
-function fileAllowed(u, allowedDirs) {
+// Real path under an allowed directory with no dot-prefixed segment below it; a missing file is
+// refused too. The page itself is always allowed, whatever its name.
+function fileAllowed(u, allowedDirs, selfPath) {
   try {
     const real = fs.realpathSync(fileURLToPath(u));
+    if (real === selfPath) return true;
     return allowedDirs.some(dir => real.startsWith(dir) && !path.relative(dir, real).split(path.sep).some(seg => seg.startsWith('.')));
   } catch { return false; }
 }
 
 function parseWidths(arg) {
-  const widths = [...new Set((arg || DEFAULT_WIDTHS).split(',').map(Number))];
+  const widths = (arg || DEFAULT_WIDTHS).split(',').map(Number);
   if (widths.length > MAX_WIDTHS) fail(`widths must be at most ${MAX_WIDTHS} values`);
   if (widths.some(w => !Number.isInteger(w) || w < 320 || w > 4000)) fail('widths must be comma-separated integers between 320 and 4000');
-  return widths;
+  return [...new Set(widths)];
 }
 
 // A timer that never keeps the process alive after the work is done.
@@ -107,7 +121,11 @@ const STICKY_REVEALS = `(() => {
     constructor(callback, options) {
       const seen = new WeakSet();
       super((entries, observer) => {
-        const kept = entries.filter(e => { if (e.isIntersecting) { seen.add(e.target); return true; } return !seen.has(e.target); });
+        const kept = entries.filter(e => {
+          if (e.isIntersecting) { seen.add(e.target); return true; }
+          if (seen.has(e.target)) { window.__shootSuppressedLeaves = (window.__shootSuppressedLeaves || 0) + 1; return false; }
+          return true;
+        });
         if (kept.length) callback(kept, observer);
       }, options);
     }
@@ -134,8 +152,9 @@ async function reportFonts(page) {
 
 // Scrolls the document and every element that really scrolls (app shells scroll a <div>, not
 // the body). The deadline lives inside the page so that when it trips the loop stops and every
-// scroller is put back to the top before the capture; the outer timeout is only a backstop for
-// a page whose scripts cannot run at all, and then nothing is put back.
+// scroller is put back to the top before the capture; the outer timeout is a backstop for a
+// page whose main thread never yields to the in-page deadline, and then nothing is put back.
+// finish() throws on infinite animations, which are left alone.
 async function fireScrollReveals(page) {
   const stopped = await withTimeout(
     page.evaluate(async ([budgetMs, maxSteps]) => {
@@ -162,31 +181,39 @@ async function fireScrollReveals(page) {
         document.getAnimations().forEach(a => { try { a.finish(); } catch {} });
       }
       return reason;
-    }, [IN_PAGE_SCROLL_MS, MAX_STEPS_PER_SCROLLER]).catch(() => null),
+    }, [IN_PAGE_SCROLL_MS, MAX_STEPS_PER_SCROLLER]).catch(() => 'failed'),
     SCROLL_WAIT_MS, 'time');
   if (stopped === 'time') console.error(`shoot.cjs: scroll pass hit its ${SCROLL_WAIT_MS / 1000} s cap; some reveals may not have fired`);
   if (stopped === 'steps') console.error(`shoot.cjs: a scroll container was longer than ${MAX_STEPS_PER_SCROLLER} steps; reveals near its end may not have fired`);
+  if (stopped === 'failed') console.error('shoot.cjs: scroll pass could not run (page navigated or crashed); reveals may not have fired');
+  const suppressed = await page.evaluate(() => window.__shootSuppressedLeaves || 0).catch(() => 0);
+  if (suppressed) console.error(`shoot.cjs: ${suppressed} IntersectionObserver leave event(s) suppressed to keep reveals visible; state driven by leaving (scrollspy nav, sticky-header toggles) may be wrong in this capture (SHOOT_STICKY_REVEALS=0 disables)`);
 }
 
+// Transitions started by the scroll-back (scroll handlers run a frame after scrollTop is set)
+// are not yet running when the in-page pass finishes animations; catch them here. Looping
+// animations (spinners, pulses) are left alone and not counted.
 async function settleAnimations(page) {
   await page.waitForTimeout(SETTLE_MS);
-  const running = await page.evaluate(() => {
-    const active = document.getAnimations().filter(a => a.playState === 'running');
+  const finished = await page.evaluate(() => {
+    const finite = a => { const t = a.effect && a.effect.getComputedTiming && a.effect.getComputedTiming(); return t && t.iterations !== Infinity && Number.isFinite(t.endTime); };
+    const active = document.getAnimations().filter(a => a.playState === 'running' && finite(a));
     active.forEach(a => { try { a.finish(); } catch {} });
     return active.length;
   }).catch(() => 0);
-  if (running) console.error(`shoot.cjs: ${running} animation(s) were still running at capture and were finished; reveal state may be inconsistent`);
+  if (finished) console.error(`shoot.cjs: ${finished} finite animation(s) were still running ${SETTLE_MS} ms after the scroll pass and were finished; check reveals near the bottom`);
 }
 
 async function capture(browser, url, width, outPrefix) {
   const allowedDirs = allowedDirsFor(url);
+  const selfPath = url.startsWith('file:') ? fs.realpathSync(fileURLToPath(url)) : null;
   const context = await browser.newContext({ viewport: { width, height: 900 }, deviceScaleFactor: 2, reducedMotion: 'reduce' });
   try {
     const blocked = new Set();
     // Local files may be embedded only from the target's own directory and below; network is untouched.
-    await context.route(u => u.protocol === 'file:' && !fileAllowed(u, allowedDirs),
+    await context.route(u => u.protocol === 'file:' && !fileAllowed(u, allowedDirs, selfPath),
       route => { blocked.add(route.request().url()); route.abort(); });
-    await context.addInitScript(STICKY_REVEALS);
+    if (STICKY_REVEALS_ON) await context.addInitScript(STICKY_REVEALS);
     const page = await context.newPage();
     await page.goto(url, { waitUntil: 'load' });
     await reportFonts(page);
@@ -196,7 +223,7 @@ async function capture(browser, url, width, outPrefix) {
     const png = await page.screenshot({ path: outPath, fullPage: true });
     const cssHeight = png.readUInt32BE(20) / 2; // PNG IHDR: width at byte 16, height at byte 20; 2x scale
     if (cssHeight > TALL_CSS_PX) console.error(`shoot.cjs: ${outPath} is ${Math.round(cssHeight)} CSS px tall; image readers downscale it, so shoot sections separately for detail work`);
-    if (blocked.size) console.error(`shoot.cjs: blocked ${blocked.size} local subresource(s) outside ${allowedDirs[0] || 'the page'} (e.g. ${[...blocked][0]}); the capture may be missing styles or images`);
+    if (blocked.size) console.error(`shoot.cjs: blocked ${blocked.size} local subresource(s) not allowed for ${allowedDirs.join(' or ') || 'a served page'} (outside it, dot-prefixed, or missing), e.g. ${[...blocked][0]}; the capture may be missing styles or images`);
     console.log(outPath);
   } finally {
     await context.close();
